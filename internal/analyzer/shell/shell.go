@@ -15,11 +15,13 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// DeleteTarget classifies where a recursive delete is pointed.
+// DeleteTarget classifies how sensitive a path location is. It is named for its
+// first use (recursive deletes) but is a generic path-severity scale reused by
+// other detectors (e.g. chmod).
 type DeleteTarget int
 
 const (
-	// TargetNone means no delete target was found.
+	// TargetNone means no target was found.
 	TargetNone DeleteTarget = iota
 	// TargetCwdRelative is a path inside the current workspace (e.g. ./dist,
 	// node_modules, *). These are everyday operations and must not be blocked.
@@ -27,8 +29,8 @@ const (
 	// TargetOutsideWorkspace is a path that escapes the workspace but is not a
 	// well-known sensitive root (e.g. ~/.cache/foo, /tmp/x, ../sibling).
 	TargetOutsideWorkspace
-	// TargetSensitive is a home/root/system root (~, $HOME, /, /*). Deleting
-	// these recursively is almost never intentional from an agent.
+	// TargetSensitive is a home/root/system root (~, $HOME, /, /*). Touching
+	// these destructively is almost never intentional from an agent.
 	TargetSensitive
 )
 
@@ -64,6 +66,13 @@ type Analysis struct {
 	// DeleteTarget is the most severe target classification across all rm
 	// operands in the command.
 	DeleteTarget DeleteTarget
+
+	// ChmodWorldWritable is true when a chmod grants write permission to
+	// "others" (e.g. 777, 666, o+w, a+w).
+	ChmodWorldWritable bool
+	// ChmodTarget is the most severe target classification across the operands
+	// of a world-writable chmod.
+	ChmodTarget DeleteTarget
 
 	// ForcePush is true for `git push --force`/`-f` (but not --force-with-lease).
 	ForcePush bool
@@ -159,6 +168,15 @@ func (a *Analysis) inspectCommand(name string, args []string, cwd string) {
 			for _, op := range operands {
 				if t := classifyTarget(op, cwd); t > a.DeleteTarget {
 					a.DeleteTarget = t
+				}
+			}
+		}
+	case "chmod":
+		if world, paths := parseChmod(args); world {
+			a.ChmodWorldWritable = true
+			for _, p := range paths {
+				if t := classifyTarget(p, cwd); t > a.ChmodTarget {
+					a.ChmodTarget = t
 				}
 			}
 		}
@@ -311,7 +329,101 @@ func parseRmFlags(args []string) (recursive, forced bool, operands []string) {
 	return recursive, forced, operands
 }
 
-// classifyTarget decides how dangerous a single rm operand is.
+// parseChmod splits chmod arguments into the mode and its target paths, then
+// reports whether the mode grants world-write. The mode is the first non-option
+// token; `--reference=FILE` copies a mode from elsewhere and is treated as not
+// world-writable (nothing to classify).
+func parseChmod(args []string) (world bool, paths []string) {
+	mode := ""
+	sawMode := false
+	for _, arg := range args {
+		if !sawMode {
+			switch {
+			case arg == "--":
+				continue
+			case strings.HasPrefix(arg, "--reference"):
+				return false, nil
+			case strings.HasPrefix(arg, "--"):
+				continue // long option (--recursive, --verbose, ...)
+			case strings.HasPrefix(arg, "-") && len(arg) > 1 && !isRemovalMode(arg):
+				continue // short option flags (-R, -Rv, -v, ...)
+			}
+			mode = arg
+			sawMode = true
+			continue
+		}
+		paths = append(paths, arg)
+	}
+	if !sawMode {
+		return false, nil
+	}
+	return chmodWorldWritable(mode), paths
+}
+
+// isRemovalMode reports whether a `-`-prefixed token is a symbolic *mode* that
+// removes permissions (e.g. `-w`, `-rx`) rather than an option flag (`-R`).
+// Removal modes never grant world-write, but they must not be skipped as flags.
+func isRemovalMode(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' {
+		return false
+	}
+	for _, c := range arg[1:] {
+		if !strings.ContainsRune("rwxXst", c) {
+			return false
+		}
+	}
+	return true
+}
+
+// chmodWorldWritable reports whether a chmod mode grants write to "others".
+func chmodWorldWritable(mode string) bool {
+	if mode == "" {
+		return false
+	}
+	if isOctalMode(mode) {
+		// The last octal digit is the "others" class; the write bit is 2.
+		last := mode[len(mode)-1] - '0'
+		return last&2 != 0
+	}
+	for _, clause := range strings.Split(mode, ",") {
+		if symbolicGrantsWorldWrite(clause) {
+			return true
+		}
+	}
+	return false
+}
+
+func isOctalMode(s string) bool {
+	if s == "" || len(s) > 4 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '7' {
+			return false
+		}
+	}
+	return true
+}
+
+// symbolicGrantsWorldWrite reports whether a single symbolic clause (e.g.
+// `o+w`, `a+rwx`, `+w`) adds write permission for others or all.
+func symbolicGrantsWorldWrite(clause string) bool {
+	i := strings.IndexAny(clause, "+-=")
+	if i < 0 {
+		return false
+	}
+	who, op, perms := clause[:i], clause[i], clause[i+1:]
+	if op == '-' { // removing permissions
+		return false
+	}
+	if !strings.ContainsRune(perms, 'w') {
+		return false
+	}
+	// An empty "who" means all (a); otherwise it must include others or all.
+	return who == "" || strings.ContainsRune(who, 'o') || strings.ContainsRune(who, 'a')
+}
+
+// classifyTarget decides how sensitive a single path operand is.
 func classifyTarget(target, cwd string) DeleteTarget {
 	t := strings.TrimSpace(target)
 	if t == "" {

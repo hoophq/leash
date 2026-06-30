@@ -108,3 +108,43 @@ func TestDenyOverridesAsk(t *testing.T) {
 		t.Errorf("matched %d rules, want 2", len(d.Matched))
 	}
 }
+
+func TestRecommendedChmodDecisions(t *testing.T) {
+	e := recommendedEngine(t)
+	const cwd = "/Users/dev/project"
+
+	cases := []struct {
+		command string
+		want    Effect
+		rule    string
+	}{
+		// World-writable on sensitive roots -> deny.
+		{"chmod -R 777 ~", EffectDeny, "chmod-world-writable-sensitive"},
+		{"chmod 777 /", EffectDeny, "chmod-world-writable-sensitive"},
+		// World-writable elsewhere -> ask.
+		{"chmod 777 /etc/passwd", EffectAsk, "chmod-world-writable"},
+		{"chmod 777 ./script.sh", EffectAsk, "chmod-world-writable"},
+		{"chmod -R o+w build", EffectAsk, "chmod-world-writable"},
+		// Not world-writable -> allow (no false positives).
+		{"chmod +x deploy.sh", EffectAllow, ""},
+		{"chmod 644 config.json", EffectAllow, ""},
+		{"chmod -R 755 public", EffectAllow, ""},
+		{"chmod 600 ~/.ssh/id_rsa", EffectAllow, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			d := e.Evaluate(Action{Kind: ActionShell, Command: tc.command, Cwd: cwd})
+			if d.Effect != tc.want {
+				t.Fatalf("Effect = %q, want %q", d.Effect, tc.want)
+			}
+			gotRule := ""
+			if d.Rule != nil {
+				gotRule = d.Rule.ID
+			}
+			if gotRule != tc.rule {
+				t.Errorf("deciding rule = %q, want %q", gotRule, tc.rule)
+			}
+		})
+	}
+}

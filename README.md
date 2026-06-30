@@ -155,6 +155,8 @@ rules:
 | `tool` | any | restrict to action kinds: `shell`, `file_write`, `file_read`, `net_fetch` |
 | `shell.recursive_delete` | shell | an `rm` with a recursive flag |
 | `shell.delete_target` | shell | `sensitive` \| `outside_workspace` \| `any` |
+| `shell.chmod_world_writable` | shell | a chmod granting world-write (`777`, `o+w`, …) |
+| `shell.chmod_target` | shell | `sensitive` \| `outside_workspace` \| `any` (of a world-writable chmod) |
 | `shell.force_push` | shell | `git push --force` (not `--force-with-lease`) |
 | `shell.history_rewrite` | shell | `git reset --hard`, `git clean -fd` |
 | `shell.pipe_to_shell` | shell | a network fetch piped into a shell/interpreter |

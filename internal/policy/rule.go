@@ -44,12 +44,14 @@ type Match struct {
 
 // ShellMatch matches against facts produced by the shell analyzer.
 type ShellMatch struct {
-	RecursiveDelete bool     `yaml:"recursive_delete,omitempty"`
-	DeleteTarget    string   `yaml:"delete_target,omitempty"` // sensitive|outside_workspace|any
-	ForcePush       bool     `yaml:"force_push,omitempty"`
-	HistoryRewrite  bool     `yaml:"history_rewrite,omitempty"`
-	PipeToShell     bool     `yaml:"pipe_to_shell,omitempty"`
-	CommandIn       []string `yaml:"command_in,omitempty"`
+	RecursiveDelete    bool     `yaml:"recursive_delete,omitempty"`
+	DeleteTarget       string   `yaml:"delete_target,omitempty"` // sensitive|outside_workspace|any
+	ChmodWorldWritable bool     `yaml:"chmod_world_writable,omitempty"`
+	ChmodTarget        string   `yaml:"chmod_target,omitempty"` // sensitive|outside_workspace|any
+	ForcePush          bool     `yaml:"force_push,omitempty"`
+	HistoryRewrite     bool     `yaml:"history_rewrite,omitempty"`
+	PipeToShell        bool     `yaml:"pipe_to_shell,omitempty"`
+	CommandIn          []string `yaml:"command_in,omitempty"`
 }
 
 func (m Match) isEmpty() bool {
@@ -68,11 +70,12 @@ func (r *Rule) compile() error {
 	if r.Match.isEmpty() {
 		return fmt.Errorf("rule %q has an empty match (would never fire)", r.ID)
 	}
-	if dt := r.Match.Shell; dt != nil && dt.DeleteTarget != "" {
-		switch dt.DeleteTarget {
-		case "sensitive", "outside_workspace", "any":
-		default:
-			return fmt.Errorf("rule %q has invalid delete_target %q", r.ID, dt.DeleteTarget)
+	if sh := r.Match.Shell; sh != nil {
+		if err := validateTargetSpec(r.ID, "delete_target", sh.DeleteTarget); err != nil {
+			return err
+		}
+		if err := validateTargetSpec(r.ID, "chmod_target", sh.ChmodTarget); err != nil {
+			return err
 		}
 	}
 	if r.Match.Regex != "" {
@@ -90,4 +93,13 @@ func (r *Rule) compile() error {
 		r.url = re
 	}
 	return nil
+}
+
+func validateTargetSpec(ruleID, field, spec string) error {
+	switch spec {
+	case "", "sensitive", "outside_workspace", "any":
+		return nil
+	default:
+		return fmt.Errorf("rule %q has invalid %s %q", ruleID, field, spec)
+	}
 }

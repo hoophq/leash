@@ -102,21 +102,14 @@ func matchShell(m *ShellMatch, a *shell.Analysis) bool {
 	if m.RecursiveDelete && !a.RecursiveDelete {
 		return false
 	}
-	if m.DeleteTarget != "" {
-		switch m.DeleteTarget {
-		case "any":
-			if a.DeleteTarget == shell.TargetNone {
-				return false
-			}
-		case "sensitive":
-			if a.DeleteTarget != shell.TargetSensitive {
-				return false
-			}
-		case "outside_workspace":
-			if a.DeleteTarget != shell.TargetOutsideWorkspace {
-				return false
-			}
-		}
+	if m.DeleteTarget != "" && !targetMatches(m.DeleteTarget, a.DeleteTarget) {
+		return false
+	}
+	if m.ChmodWorldWritable && !a.ChmodWorldWritable {
+		return false
+	}
+	if m.ChmodTarget != "" && !targetMatches(m.ChmodTarget, a.ChmodTarget) {
+		return false
 	}
 	if m.ForcePush && !a.ForcePush {
 		return false
@@ -129,6 +122,21 @@ func matchShell(m *ShellMatch, a *shell.Analysis) bool {
 	}
 	if len(m.CommandIn) > 0 && !a.Has(m.CommandIn...) {
 		return false
+	}
+	return true
+}
+
+// targetMatches reports whether a path-severity spec
+// (sensitive|outside_workspace|any) is satisfied by the analyzed target.
+// Unknown specs are rejected at load time, so they pass here.
+func targetMatches(spec string, t shell.DeleteTarget) bool {
+	switch spec {
+	case "any":
+		return t != shell.TargetNone
+	case "sensitive":
+		return t == shell.TargetSensitive
+	case "outside_workspace":
+		return t == shell.TargetOutsideWorkspace
 	}
 	return true
 }
