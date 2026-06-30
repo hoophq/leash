@@ -116,6 +116,48 @@ func TestPipeToShellFromNet(t *testing.T) {
 	}
 }
 
+func TestChmodFacts(t *testing.T) {
+	const cwd = "/Users/dev/project"
+	cases := []struct {
+		name    string
+		command string
+		world   bool
+		target  DeleteTarget
+	}{
+		// World-writable on sensitive roots.
+		{"recursive 777 home", "chmod -R 777 ~", true, TargetSensitive},
+		{"777 root", "chmod 777 /", true, TargetSensitive},
+		{"a+rwx home", "chmod -R a+rwx $HOME", true, TargetSensitive},
+		// World-writable elsewhere.
+		{"777 etc passwd", "chmod 777 /etc/passwd", true, TargetOutsideWorkspace},
+		{"666 tmp", "chmod 666 /tmp/x", true, TargetOutsideWorkspace},
+		{"777 local file", "chmod 777 ./script.sh", true, TargetCwdRelative},
+		{"o+w local", "chmod o+w config.yaml", true, TargetCwdRelative},
+		{"combined flags then mode", "chmod -Rv 777 build", true, TargetCwdRelative},
+		// Not world-writable -> no fact (no false positives).
+		{"add execute", "chmod +x script.sh", false, TargetNone},
+		{"644", "chmod 644 file", false, TargetNone},
+		{"755 recursive", "chmod -R 755 dir", false, TargetNone},
+		{"600 key", "chmod 600 ~/.ssh/id_rsa", false, TargetNone},
+		{"remove world write", "chmod o-w file", false, TargetNone},
+		{"owner write only", "chmod u+w file", false, TargetNone},
+		{"group write only", "chmod g+w file", false, TargetNone},
+		{"not chmod", "ls -la", false, TargetNone},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := Analyze(tc.command, cwd)
+			if a.ChmodWorldWritable != tc.world {
+				t.Errorf("ChmodWorldWritable = %v, want %v", a.ChmodWorldWritable, tc.world)
+			}
+			if a.ChmodTarget != tc.target {
+				t.Errorf("ChmodTarget = %v, want %v", a.ChmodTarget, tc.target)
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration(t *testing.T) {
 	cases := []struct {
 		name    string

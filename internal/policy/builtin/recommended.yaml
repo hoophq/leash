@@ -34,6 +34,29 @@ rules:
         recursive_delete: true
         delete_target: outside_workspace
 
+  - id: chmod-world-writable-sensitive
+    description: Making home, root, or a system location world-writable
+    severity: critical
+    effect: deny
+    message: >-
+      Leash blocked a chmod that makes a sensitive location (home, root, or a
+      system path) world-writable. This is almost never intended.
+    match:
+      shell:
+        chmod_world_writable: true
+        chmod_target: sensitive
+
+  - id: chmod-world-writable
+    description: Making files world-writable (chmod 777 / o+w)
+    severity: medium
+    effect: ask
+    message: >-
+      This makes files world-writable — anyone on the machine can modify them.
+      Confirm this is intended.
+    match:
+      shell:
+        chmod_world_writable: true
+
   - id: pipe-to-shell-from-network
     description: Piping a network download directly into a shell or interpreter
     severity: high
