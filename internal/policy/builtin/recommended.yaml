@@ -107,6 +107,18 @@ rules:
       shell:
         secret_exfil: any
 
+  - id: secret-read-into-context
+    description: Dumping a private key or cloud credential into the agent's context
+    severity: high
+    effect: ask
+    message: >-
+      A private key or cloud credential is being dumped to stdout (cat, base64,
+      …), which reads its contents into the agent's context. Confirm this is
+      intended — the disclosure cannot be undone once the command runs.
+    match:
+      shell:
+        secret_read: high
+
   - id: git-force-push
     description: Force-push can irreversibly overwrite remote history
     severity: medium
@@ -136,6 +148,26 @@ rules:
     message: Leash blocked what looks like a fork bomb.
     match:
       regex: ':\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:'
+
+  - id: read-credential-files
+    description: Reading private keys or cloud credentials (their contents enter the agent's context)
+    severity: high
+    effect: ask
+    message: >-
+      An agent is reading private-key or cloud-credential material. Its contents
+      would enter the model context. Confirm this is intended.
+    match:
+      tool: [file_read]
+      path_glob:
+        - "~/.ssh/id_rsa"
+        - "~/.ssh/id_dsa"
+        - "~/.ssh/id_ecdsa"
+        - "~/.ssh/id_ed25519"
+        - "~/.aws/credentials"
+        - "~/.config/gcloud/**"
+        - "~/.kube/config"
+        - "**/*.pem"
+        - "**/*.key"
 
   - id: write-credential-files
     description: Writing or overwriting credential, key, or secret files

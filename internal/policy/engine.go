@@ -168,6 +168,15 @@ func matchShell(m *ShellMatch, a *shell.Analysis) bool {
 			return false
 		}
 	}
+	if m.SecretRead != "" {
+		// A reader command dumps a secret's contents into the agent's context.
+		if a.SecretDump == shell.SecretNone {
+			return false
+		}
+		if m.SecretRead == "high" && a.SecretDump != shell.SecretHigh {
+			return false
+		}
+	}
 	if len(m.CommandIn) > 0 && !a.Has(m.CommandIn...) {
 		return false
 	}

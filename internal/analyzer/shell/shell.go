@@ -123,6 +123,12 @@ type Analysis struct {
 	// curl/wget upload, nc connecting out, or a bash /dev/tcp redirect.
 	NetEgress bool
 
+	// SecretDump is the highest-confidence secret whose *contents* a
+	// content-reading command (cat, head, base64, xxd, …) surfaces to stdout —
+	// and thus into the agent's context. Unlike SecretRead it is not set by
+	// commands that merely name the path (chmod, ls, cp), and it ignores .env.
+	SecretDump SecretConfidence
+
 	// Raw is the original command text.
 	Raw string
 }
@@ -149,6 +155,18 @@ var (
 		"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true,
 		"python": true, "python3": true, "node": true, "nodejs": true, "ruby": true,
 		"perl": true, "php": true,
+	}
+	// secretReaders dump a file's contents to stdout. An agent running one of
+	// these on key/credential material pipes the secret straight into its own
+	// context. Commands that only reference a path (chmod, ls, cp, mv, stat) are
+	// deliberately absent — they disclose nothing.
+	secretReaders = map[string]bool{
+		"cat": true, "tac": true, "nl": true,
+		"head": true, "tail": true,
+		"less": true, "more": true, "most": true,
+		"base64": true, "base32": true,
+		"xxd": true, "od": true, "hexdump": true, "hd": true,
+		"strings": true,
 	}
 )
 
@@ -263,6 +281,18 @@ func (a *Analysis) inspectCommand(name string, args []string, cwd string) {
 		for _, arg := range args {
 			if !strings.HasPrefix(arg, "-") && isBlockDevice(arg) {
 				a.BlockDeviceWrite = true
+			}
+		}
+	}
+	// A content-reading command (cat, head, base64, …) whose operand is secret
+	// material dumps that secret into the agent's context.
+	if secretReaders[name] {
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-") {
+				continue // option flag, not a path operand
+			}
+			if c := classifySecret(arg); c > a.SecretDump {
+				a.SecretDump = c
 			}
 		}
 	}
