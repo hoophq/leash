@@ -51,7 +51,15 @@ differently:
 
 ## Install
 
-**From source (works today):**
+### Homebrew (macOS / Linux)
+
+```bash
+brew install hoophq/tap/leash
+```
+
+> Lands with the first tagged release. Until then, install from source:
+
+### From source
 
 ```bash
 go install github.com/hoophq/leash/cmd/leash@latest
@@ -64,7 +72,7 @@ git clone https://github.com/hoophq/leash && cd leash
 make build      # -> ./dist/leash
 ```
 
-> Homebrew (`brew install leash`) and `npx leash` one-liners are on the roadmap.
+> An `npx leash` one-liner is next on the installer roadmap.
 
 ---
 
