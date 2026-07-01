@@ -53,6 +53,7 @@ type ShellMatch struct {
 	HistoryRewrite     bool     `yaml:"history_rewrite,omitempty"`
 	PipeToShell        bool     `yaml:"pipe_to_shell,omitempty"`
 	SecretExfil        string   `yaml:"secret_exfil,omitempty"` // high|any
+	SecretRead         string   `yaml:"secret_read,omitempty"`  // high|any — a reader command dumps a secret to stdout
 	CommandIn          []string `yaml:"command_in,omitempty"`
 }
 
@@ -79,12 +80,11 @@ func (r *Rule) compile() error {
 		if err := validateTargetSpec(r.ID, "chmod_target", sh.ChmodTarget); err != nil {
 			return err
 		}
-		if sh.SecretExfil != "" {
-			switch sh.SecretExfil {
-			case "high", "any":
-			default:
-				return fmt.Errorf("rule %q has invalid secret_exfil %q", r.ID, sh.SecretExfil)
-			}
+		if err := validateSecretSpec(r.ID, "secret_exfil", sh.SecretExfil); err != nil {
+			return err
+		}
+		if err := validateSecretSpec(r.ID, "secret_read", sh.SecretRead); err != nil {
+			return err
 		}
 	}
 	if r.Match.Regex != "" {
@@ -107,6 +107,15 @@ func (r *Rule) compile() error {
 func validateTargetSpec(ruleID, field, spec string) error {
 	switch spec {
 	case "", "sensitive", "outside_workspace", "any":
+		return nil
+	default:
+		return fmt.Errorf("rule %q has invalid %s %q", ruleID, field, spec)
+	}
+}
+
+func validateSecretSpec(ruleID, field, spec string) error {
+	switch spec {
+	case "", "high", "any":
 		return nil
 	default:
 		return fmt.Errorf("rule %q has invalid %s %q", ruleID, field, spec)

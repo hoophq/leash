@@ -212,6 +212,56 @@ func TestBlockDeviceWrite(t *testing.T) {
 	}
 }
 
+func TestSecretDump(t *testing.T) {
+	const cwd = "/Users/dev/project"
+	cases := []struct {
+		name    string
+		command string
+		want    SecretConfidence
+	}{
+		// A content-reading command dumps key/credential material -> high.
+		{"cat ssh key", "cat ~/.ssh/id_rsa", SecretHigh},
+		{"head aws creds", "head ~/.aws/credentials", SecretHigh},
+		{"base64 ed25519", "base64 ~/.ssh/id_ed25519", SecretHigh},
+		{"xxd ssh key", "xxd ~/.ssh/id_rsa", SecretHigh},
+		{"strings aws creds", "strings ~/.aws/credentials", SecretHigh},
+		{"tail kube config", "tail -n5 ~/.kube/config", SecretHigh},
+		{"less gcloud creds", "less ~/.config/gcloud/application_default_credentials.json", SecretHigh},
+		{"cat pem", "cat server.pem", SecretHigh},
+		{"cat key file", "cat deploy.key", SecretHigh},
+		{"sudo cat key", "sudo cat ~/.ssh/id_rsa", SecretHigh},
+		{"two keys", "cat ~/.ssh/id_rsa ~/.ssh/id_ed25519", SecretHigh},
+
+		// .env is recorded, but only at env confidence — the recommended pack
+		// asks on `high` only, so this stays allowed.
+		{"cat dotenv", "cat .env", SecretEnv},
+		{"cat dotenv variant", "cat .env.production", SecretEnv},
+
+		// A reader on non-secret material, or a NON-reader that merely names a
+		// secret path (chmod/ls/cp), discloses nothing.
+		{"chmod is not a read", "chmod 600 ~/.ssh/id_rsa", SecretNone},
+		{"ls ssh dir", "ls -la ~/.ssh", SecretNone},
+		{"cp key elsewhere", "cp ~/.ssh/id_rsa /tmp/backup", SecretNone},
+		{"public key", "cat ~/.ssh/id_rsa.pub", SecretNone},
+		{"known_hosts", "cat ~/.ssh/known_hosts", SecretNone},
+		{"cat readme", "cat README.md", SecretNone},
+		{"head config json", "head -n 20 config.json", SecretNone},
+		{"git diff", "git diff", SecretNone},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := Analyze(tc.command, cwd)
+			if !a.Parsed {
+				t.Fatalf("command did not parse: %q", tc.command)
+			}
+			if a.SecretDump != tc.want {
+				t.Errorf("SecretDump = %v, want %v", a.SecretDump, tc.want)
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration(t *testing.T) {
 	cases := []struct {
 		name    string
