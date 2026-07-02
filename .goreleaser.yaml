@@ -48,8 +48,8 @@ changelog:
 
 # Publish a Homebrew Cask to hoophq/homebrew-tap so macOS users can
 # `brew install hoophq/tap/leash`. Casks (not formulae) are GoReleaser's
-# supported path for pre-built binaries and they clear the Gatekeeper quarantine
-# on the unsigned binary; Linux users get the tarball, `go install`, or npx.
+# supported path for pre-built binaries; Linux users get the tarball, `go
+# install`, or npx.
 # Requires HOMEBREW_TAP_GITHUB_TOKEN (a PAT with write access to the tap) at
 # release time.
 homebrew_casks:
@@ -60,3 +60,13 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/hoophq/leash"
     description: "Guardrails for AI coding agents — blocks catastrophic tool calls before they run"
+    # Homebrew quarantines cask downloads, and Gatekeeper SIGKILLs the ad-hoc
+    # (linker-signed) Go binary on first run — install succeeds, running dies.
+    # Strip the quarantine bit post-install (GoReleaser's documented pattern)
+    # until the binary is properly signed + notarized.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/leash"]
+          end
