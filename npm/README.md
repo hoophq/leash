@@ -6,8 +6,10 @@ directory, secret exfiltration, `curl | sh`, force-pushes — *before* they
 execute.
 
 ```bash
-npx @hoophq/leash check 'rm -rf ~'      # DENY
-npx @hoophq/leash init                  # wire it into Claude Code
+npm install -g @hoophq/leash
+
+leash check 'rm -rf ~'      # DENY
+leash init                  # wire it into Claude Code
 ```
 
 This package ships the native `leash` binary. It uses the esbuild/biome

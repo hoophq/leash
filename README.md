@@ -87,8 +87,8 @@ brew install hoophq/tap/leash
 ```
 
 ```bash
-# npx — macOS / Linux, no install
-npx @hoophq/leash
+# npm — macOS / Linux
+npm install -g @hoophq/leash
 ```
 
 ## Quickstart — Claude Code
@@ -194,7 +194,7 @@ developer can't override it.
 
 - [x] Semantic detectors — deletes, disk wipes, fork bombs, exfiltration,
       world-writable, off-registry installs, manifest hooks, persistence
-- [x] One-line installers — Homebrew, npx
+- [x] One-line installers — Homebrew, npm
 - [ ] More agents — Codex, Cursor, Gemini CLI
 - [ ] A shareable rulepack registry — `leash add <pack>`
 
