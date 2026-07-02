@@ -31,18 +31,18 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return fail(cmd, err)
 			}
-			binary, err := hookInvocation()
+			result, err := installHook(path, hookInvocation())
 			if err != nil {
 				return fail(cmd, err)
 			}
-			changed, err := installHook(path, binary)
-			if err != nil {
-				return fail(cmd, err)
-			}
-			if changed {
+			switch result {
+			case hookInstalled:
 				fmt.Fprintf(cmd.OutOrStdout(), "Installed Leash hook in %s\n", path)
 				fmt.Fprintf(cmd.OutOrStdout(), "Restart Claude Code (or start a new session) to activate it.\n")
-			} else {
+			case hookUpdated:
+				fmt.Fprintf(cmd.OutOrStdout(), "Updated the Leash hook command in %s\n", path)
+				fmt.Fprintf(cmd.OutOrStdout(), "Restart Claude Code (or start a new session) to pick it up.\n")
+			default:
 				fmt.Fprintf(cmd.OutOrStdout(), "Leash hook already present in %s\n", path)
 			}
 			return nil
@@ -69,38 +69,63 @@ func settingsPath(global bool) (string, error) {
 }
 
 // hookInvocation returns the command string Claude Code should run. It uses the
-// absolute path of the current binary so the hook works regardless of PATH.
-func hookInvocation() (string, error) {
+// absolute path of the current binary so the hook works regardless of PATH, but
+// keeps symlinks unresolved: package managers point a stable symlink (e.g.
+// /opt/homebrew/bin/leash) at a version-pinned target that vanishes on upgrade,
+// so resolving it would break the hook at the next `brew upgrade`.
+func hookInvocation() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return hookCommand, nil // fall back to PATH lookup of "leash"
+		return hookCommand // fall back to PATH lookup of "leash"
 	}
-	resolved, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		resolved = exe
-	}
-	return fmt.Sprintf("%s hook claude-code", resolved), nil
+	return fmt.Sprintf("%s hook claude-code", exe)
 }
 
+// hookInstallResult describes what installHook changed.
+type hookInstallResult int
+
+const (
+	hookUnchanged hookInstallResult = iota
+	hookInstalled
+	hookUpdated
+)
+
 // installHook merges a PreToolUse hook into the settings file at path, creating
-// it if necessary. It returns whether a change was made.
-func installHook(path, command string) (bool, error) {
+// it if necessary. An existing leash hook whose command differs — e.g. a stale
+// binary path left by a previous install — is updated in place, so re-running
+// `leash init` always converges on a working hook.
+func installHook(path, command string) (hookInstallResult, error) {
 	settings := map[string]any{}
 	if data, err := os.ReadFile(path); err == nil {
 		if len(data) > 0 {
 			if err := json.Unmarshal(data, &settings); err != nil {
-				return false, fmt.Errorf("%s is not valid JSON: %w", path, err)
+				return hookUnchanged, fmt.Errorf("%s is not valid JSON: %w", path, err)
 			}
 		}
 	} else if !os.IsNotExist(err) {
-		return false, err
+		return hookUnchanged, err
 	}
 
 	hooks := asMap(settings["hooks"])
 	preToolUse := asSlice(hooks["PreToolUse"])
 
-	if hookPresent(preToolUse) {
-		return false, nil
+	result := hookUnchanged
+	for _, e := range preToolUse {
+		for _, h := range asSlice(asMap(e)["hooks"]) {
+			hm := asMap(h)
+			cmd, ok := hm["command"].(string)
+			if !ok || !containsHook(cmd) {
+				continue
+			}
+			if cmd != command {
+				hm["command"] = command
+				return writeSettings(path, settings, hooks, preToolUse, hookUpdated)
+			}
+			result = hookInstalled // present and current
+		}
+	}
+	if result == hookInstalled {
+		return hookUnchanged, nil
 	}
 
 	entry := map[string]any{
@@ -110,35 +135,25 @@ func installHook(path, command string) (bool, error) {
 		},
 	}
 	preToolUse = append(preToolUse, entry)
+	return writeSettings(path, settings, hooks, preToolUse, hookInstalled)
+}
+
+func writeSettings(path string, settings, hooks map[string]any, preToolUse []any, result hookInstallResult) (hookInstallResult, error) {
 	hooks["PreToolUse"] = preToolUse
 	settings["hooks"] = hooks
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
+		return hookUnchanged, err
 	}
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return false, err
+		return hookUnchanged, err
 	}
 	out = append(out, '\n')
 	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return false, err
+		return hookUnchanged, err
 	}
-	return true, nil
-}
-
-// hookPresent reports whether any PreToolUse entry already runs a leash hook.
-func hookPresent(entries []any) bool {
-	for _, e := range entries {
-		em := asMap(e)
-		for _, h := range asSlice(em["hooks"]) {
-			hm := asMap(h)
-			if cmd, ok := hm["command"].(string); ok && containsHook(cmd) {
-				return true
-			}
-		}
-	}
-	return false
+	return result, nil
 }
 
 func containsHook(cmd string) bool {
