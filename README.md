@@ -39,6 +39,10 @@ Leash is built the other way:
   product.
 - 🚦 **Block, ask, or allow.** Unambiguous catastrophe is blocked; the
   plausibly-legit gets a confirm prompt; the everyday passes in silence.
+- 🔒 **Permissive modes don't weaken it.** Agent hooks run *before* the
+  permission system, so a leash `deny` blocks even in auto-accept or
+  `--dangerously-skip-permissions` sessions — where it's the only guardrail
+  left standing.
 - 🪶 **Fails open.** If Leash can't parse something, the command runs. A
   guardrail must never brick the agent it protects.
 - 🧩 **Agent-neutral.** One portable rulepack. Claude Code today; Codex, Cursor,
