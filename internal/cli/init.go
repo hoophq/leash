@@ -22,8 +22,8 @@ const sessionStartMatcher = "startup|resume|clear"
 
 func newInitCommand() *cobra.Command {
 	var (
-		global  bool
-		verbose bool
+		global bool
+		quiet  bool
 	)
 
 	cmd := &cobra.Command{
@@ -35,14 +35,14 @@ func newInitCommand() *cobra.Command {
 			"settings (./.claude/settings.json); use --global for ~/.claude/settings.json.\n\n" +
 			"The change is idempotent and preserves any existing settings. Re-running\n" +
 			"init always converges the hook commands, so it also heals a stale binary\n" +
-			"path and toggles --verbose on or off.",
+			"path and toggles --quiet on or off.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := settingsPath(global)
 			if err != nil {
 				return fail(cmd, err)
 			}
-			result, err := installHooks(path, desiredHooks(verbose))
+			result, err := installHooks(path, desiredHooks(quiet))
 			if err != nil {
 				return fail(cmd, err)
 			}
@@ -61,8 +61,12 @@ func newInitCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&global, "global", false, "install into ~/.claude/settings.json instead of the project")
-	cmd.Flags().BoolVar(&verbose, "verbose", false,
-		"show a chat notice for allowed tool calls too (re-run init without it to switch back)")
+	cmd.Flags().BoolVar(&quiet, "quiet", false,
+		"don't show a chat notice for allowed tool calls (re-run init without it to switch back)")
+	// --verbose asked for what is now the default; running it plain is correct.
+	cmd.Flags().Bool("verbose", true, "")
+	_ = cmd.Flags().MarkDeprecated("verbose",
+		"allowed-call notices are now the default; use --quiet to turn them off")
 	return cmd
 }
 
@@ -91,11 +95,11 @@ type hookSpec struct {
 }
 
 // desiredHooks returns the hook entries `leash init` converges the settings to.
-func desiredHooks(verbose bool) []hookSpec {
+func desiredHooks(quiet bool) []hookSpec {
 	base := hookInvocation()
 	pre := base
-	if verbose {
-		pre += " --verbose"
+	if quiet {
+		pre += " --quiet"
 	}
 	return []hookSpec{
 		{event: "PreToolUse", matcher: toolMatcher, command: pre},
@@ -129,7 +133,7 @@ const (
 
 // installHooks merges the desired hook entries into the settings file at path,
 // creating it if necessary. An existing leash hook whose command differs —
-// e.g. a stale binary path left by a previous install, or a verbose toggle —
+// e.g. a stale binary path left by a previous install, or a quiet toggle —
 // is updated in place, so re-running `leash init` always converges on working
 // hooks.
 func installHooks(path string, specs []hookSpec) (hookInstallResult, error) {
@@ -199,7 +203,8 @@ func installHooks(path string, specs []hookSpec) (hookInstallResult, error) {
 // invocation while keeping any trailing tokens init does not manage (a
 // hand-added --rules, say): the user put them there, and dropping them would
 // silently weaken their setup. The tokens init owns — the session-start
-// subcommand and --verbose — are regenerated from the desired command.
+// subcommand, --quiet, and the legacy --verbose (now the default, so the
+// token is dropped) — are regenerated from the desired command.
 func convergeCommand(existing, desired string) string {
 	_, rest, found := strings.Cut(existing, hookCommand)
 	if !found {
@@ -207,7 +212,7 @@ func convergeCommand(existing, desired string) string {
 	}
 	var extra []string
 	for tok := range strings.FieldsSeq(rest) {
-		if tok == "session-start" || tok == "--verbose" {
+		if tok == "session-start" || tok == "--quiet" || tok == "--verbose" {
 			continue
 		}
 		extra = append(extra, tok)
@@ -220,7 +225,7 @@ func convergeCommand(existing, desired string) string {
 
 // containsHook reports whether cmd is a Leash claude-code hook invocation —
 // through any binary path, possibly followed by a subcommand or flags
-// ("… session-start", "… --verbose"). Trailing shell syntax means the string
+// ("… session-start", "… --quiet"). Trailing shell syntax means the string
 // only mentions the invocation rather than being one, so it is not ours.
 func containsHook(cmd string) bool {
 	_, rest, found := strings.Cut(cmd, hookCommand)
