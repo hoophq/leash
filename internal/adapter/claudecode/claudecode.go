@@ -99,7 +99,7 @@ func writeContent(tool string, ti toolInput) string {
 // hookOutput is the hook response envelope. SystemMessage is a line Claude
 // Code shows to the user in the chat; HookSpecificOutput carries the
 // permission decision and is omitted entirely when Leash has no opinion
-// (warn feedback, verbose allow feedback, the session banner).
+// (warn feedback, allow feedback, the session banner).
 type hookOutput struct {
 	SystemMessage      string              `json:"systemMessage,omitempty"`
 	HookSpecificOutput *hookSpecificOutput `json:"hookSpecificOutput,omitempty"`
@@ -116,12 +116,13 @@ type hookSpecificOutput struct {
 //   - deny  -> permissionDecision "deny"  (blocks the tool call) + chat notice
 //   - ask   -> permissionDecision "ask"   (forces a user confirmation prompt) + chat notice
 //   - warn  -> no decision emitted; chat notice only; action proceeds
-//   - allow -> nothing emitted so the user's own permission flow is untouched;
-//     with verbose, a chat notice (still no decision) confirms Leash looked
+//   - allow -> a chat notice (no decision) confirms Leash looked, so the
+//     user's own permission flow is untouched; with quiet, nothing at all
 //
 // Emitting an explicit "allow" decision would auto-approve the call and bypass
-// the user's permission settings, so Leash never does — even in verbose mode.
-func WriteDecision(w io.Writer, d policy.Decision, verbose bool) error {
+// the user's permission settings, so Leash never does — the allow notice is
+// feedback only.
+func WriteDecision(w io.Writer, d policy.Decision, quiet bool) error {
 	switch d.Effect {
 	case policy.EffectDeny:
 		return emit(w, hookOutput{
@@ -136,7 +137,7 @@ func WriteDecision(w io.Writer, d policy.Decision, verbose bool) error {
 	case policy.EffectWarn:
 		return emit(w, hookOutput{SystemMessage: systemMessage("flagged this", d)})
 	default:
-		if !verbose {
+		if quiet {
 			return nil
 		}
 		return emit(w, hookOutput{SystemMessage: systemMessage("allowed this", d)})

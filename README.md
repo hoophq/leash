@@ -100,8 +100,8 @@ leash init --global   # add the Leash hooks to .claude/settings.json, for every 
 Start a Claude Code session and Leash is live — a banner in the chat confirms
 it (`🐕 Leash is guarding this session…`). Ask the agent for something
 reckless — it gets stopped, or asked to confirm, with a `🐕` notice in the chat
-saying which rule fired. Want a notice for allowed calls too? `leash init
---verbose`.
+saying which rule fired. Allowed calls get a notice too, so you can see Leash
+watching; `leash init --quiet` turns those off.
 
 ```bash
 claude

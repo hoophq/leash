@@ -47,26 +47,41 @@ func TestHookClaudeCodeDeny(t *testing.T) {
 	}
 }
 
-func TestHookClaudeCodeAllowIsSilent(t *testing.T) {
+func TestHookClaudeCodeAllowAnnounces(t *testing.T) {
 	isolateHome(t)
 	out := runLeash(t, `{"cwd":".","tool_name":"Bash","tool_input":{"command":"ls -la"}}`,
 		"hook", "claude-code")
-	if out != "" {
-		t.Fatalf("an allowed call must produce no output, got:\n%s", out)
+	if !strings.Contains(out, "Leash allowed this") {
+		t.Errorf("allow missing the notice:\n%s", out)
+	}
+	// The bypass guard, end to end: allow feedback must never carry a
+	// permission decision.
+	if strings.Contains(out, "permissionDecision") {
+		t.Fatalf("allow must not emit a permission decision:\n%s", out)
 	}
 }
 
-func TestHookClaudeCodeVerboseAllow(t *testing.T) {
+func TestHookClaudeCodeQuietAllowIsSilent(t *testing.T) {
+	isolateHome(t)
+	out := runLeash(t, `{"cwd":".","tool_name":"Bash","tool_input":{"command":"ls -la"}}`,
+		"hook", "claude-code", "--quiet")
+	if out != "" {
+		t.Fatalf("a quiet allowed call must produce no output, got:\n%s", out)
+	}
+}
+
+// Settings files written by older `leash init --verbose` runs still pass
+// --verbose on every tool call; the flag must stay accepted (it asked for
+// what is now the default) or those hooks would error out and fail open.
+func TestHookClaudeCodeLegacyVerboseFlagStillAccepted(t *testing.T) {
 	isolateHome(t)
 	out := runLeash(t, `{"cwd":".","tool_name":"Bash","tool_input":{"command":"ls -la"}}`,
 		"hook", "claude-code", "--verbose")
 	if !strings.Contains(out, "Leash allowed this") {
-		t.Errorf("verbose allow missing the notice:\n%s", out)
+		t.Errorf("legacy --verbose allow missing the notice:\n%s", out)
 	}
-	// The bypass guard, end to end: verbose feedback must never carry a
-	// permission decision.
 	if strings.Contains(out, "permissionDecision") {
-		t.Fatalf("verbose allow must not emit a permission decision:\n%s", out)
+		t.Fatalf("allow must not emit a permission decision:\n%s", out)
 	}
 }
 

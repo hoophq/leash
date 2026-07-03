@@ -18,7 +18,7 @@ func newHookCommand(version string) *cobra.Command {
 }
 
 func newClaudeCodeHookCommand(version string) *cobra.Command {
-	var verbose bool
+	var quiet bool
 
 	cmd := &cobra.Command{
 		Use:   "claude-code",
@@ -27,7 +27,7 @@ func newClaudeCodeHookCommand(version string) *cobra.Command {
 			"decision on stdout. Wire it up with `leash init`, or manually as a\n" +
 			"PreToolUse hook running `leash hook claude-code`.\n\n" +
 			"Deny/ask/warn decisions include a chat notice (systemMessage) so the\n" +
-			"user sees Leash act; with --verbose, allowed calls get a notice too.\n\n" +
+			"user sees Leash act; allowed calls get a notice too unless --quiet.\n\n" +
 			"This command fails open: if anything goes wrong, the tool call is\n" +
 			"allowed so the agent is never bricked by Leash.",
 		Args: cobra.NoArgs,
@@ -35,11 +35,17 @@ func newClaudeCodeHookCommand(version string) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runClaudeCodeHook(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), verbose)
+			return runClaudeCodeHook(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), quiet)
 		},
 	}
-	cmd.Flags().BoolVar(&verbose, "verbose", false,
-		"also show a chat notice for allowed tool calls (deny/ask/warn always show one)")
+	cmd.Flags().BoolVar(&quiet, "quiet", false,
+		"don't show a chat notice for allowed tool calls (deny/ask/warn always show one)")
+	// --verbose asked for what is now the default. It must stay accepted —
+	// silently, with no deprecation chatter on stderr — because settings files
+	// written by older `leash init --verbose` runs pass it on every tool call;
+	// rejecting it would fail the hook and leave those sessions unguarded.
+	cmd.Flags().Bool("verbose", true, "")
+	_ = cmd.Flags().MarkHidden("verbose")
 	cmd.AddCommand(newSessionStartHookCommand(version))
 	return cmd
 }
@@ -63,7 +69,7 @@ func newSessionStartHookCommand(version string) *cobra.Command {
 // runClaudeCodeHook always returns nil (exit 0). It communicates decisions
 // through the JSON protocol on out, never through the exit code, and it fails
 // open on any internal error.
-func runClaudeCodeHook(in io.Reader, out, errw io.Writer, verbose bool) error {
+func runClaudeCodeHook(in io.Reader, out, errw io.Writer, quiet bool) error {
 	engine, _, err := buildEngine()
 	if err != nil {
 		fmt.Fprintf(errw, "leash: failed to load rules, allowing: %v\n", err)
@@ -78,7 +84,7 @@ func runClaudeCodeHook(in io.Reader, out, errw io.Writer, verbose bool) error {
 
 	decision := engine.Evaluate(action)
 
-	if err := claudecode.WriteDecision(out, decision, verbose); err != nil {
+	if err := claudecode.WriteDecision(out, decision, quiet); err != nil {
 		fmt.Fprintf(errw, "leash: could not write decision, allowing: %v\n", err)
 	}
 	return nil

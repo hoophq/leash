@@ -14,10 +14,10 @@ const (
 )
 
 // testSpecs mirrors desiredHooks with a fixed binary path.
-func testSpecs(verbose bool) []hookSpec {
+func testSpecs(quiet bool) []hookSpec {
 	pre := wantCommand
-	if verbose {
-		pre += " --verbose"
+	if quiet {
+		pre += " --quiet"
 	}
 	return []hookSpec{
 		{event: "PreToolUse", matcher: toolMatcher, command: pre},
@@ -56,7 +56,7 @@ func TestInstallHooks(t *testing.T) {
 	tests := []struct {
 		name        string
 		initial     string // "" means the settings file does not exist yet
-		verbose     bool
+		quiet       bool
 		want        hookInstallResult
 		preCmds     []string // expected PreToolUse commands after the call, in order
 		sessionCmds []string // expected SessionStart commands after the call, in order
@@ -115,17 +115,29 @@ func TestInstallHooks(t *testing.T) {
 			sessionCmds: []string{wantSessionCommand},
 		},
 		{
-			name: "verbose toggles on",
+			name: "quiet toggles on",
 			initial: `{"hooks":{
 				"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code"}]}],
 				"SessionStart":[{"matcher":"startup|resume|clear","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code session-start"}]}]}}`,
-			verbose:     true,
+			quiet:       true,
 			want:        hookUpdated,
-			preCmds:     []string{wantCommand + " --verbose"},
+			preCmds:     []string{wantCommand + " --quiet"},
 			sessionCmds: []string{wantSessionCommand},
 		},
 		{
-			name: "verbose toggles back off",
+			name: "quiet toggles back off",
+			initial: `{"hooks":{
+				"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code --quiet"}]}],
+				"SessionStart":[{"matcher":"startup|resume|clear","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code session-start"}]}]}}`,
+			want:        hookUpdated,
+			preCmds:     []string{wantCommand},
+			sessionCmds: []string{wantSessionCommand},
+		},
+		{
+			// The upgrade path from installs made when allowed-call notices were
+			// opt-in: the legacy --verbose token asked for what is now the
+			// default, so converging drops it.
+			name: "legacy --verbose converges to the plain command",
 			initial: `{"hooks":{
 				"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code --verbose"}]}],
 				"SessionStart":[{"matcher":"startup|resume|clear","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code session-start"}]}]}}`,
@@ -146,13 +158,13 @@ func TestInstallHooks(t *testing.T) {
 			sessionCmds: []string{wantSessionCommand},
 		},
 		{
-			name: "preserves an unmanaged flag across a verbose toggle",
+			name: "preserves an unmanaged flag across a quiet toggle",
 			initial: `{"hooks":{
 				"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code --rules /custom.yaml"}]}],
 				"SessionStart":[{"matcher":"startup|resume|clear","hooks":[{"type":"command","command":"/opt/homebrew/bin/leash hook claude-code session-start"}]}]}}`,
-			verbose:     true,
+			quiet:       true,
 			want:        hookUpdated,
-			preCmds:     []string{wantCommand + " --verbose --rules /custom.yaml"},
+			preCmds:     []string{wantCommand + " --quiet --rules /custom.yaml"},
 			sessionCmds: []string{wantSessionCommand},
 		},
 		{
@@ -178,7 +190,7 @@ func TestInstallHooks(t *testing.T) {
 				}
 			}
 
-			got, err := installHooks(path, testSpecs(tt.verbose))
+			got, err := installHooks(path, testSpecs(tt.quiet))
 			if err != nil {
 				t.Fatalf("installHooks: %v", err)
 			}
@@ -201,6 +213,22 @@ func TestInstallHooks(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The pre-default spelling `leash init --verbose` must keep parsing (users
+// type it from muscle memory): it asked for what is now the default, so the
+// written hook command carries no token at all.
+func TestInitLegacyVerboseFlagStillAccepted(t *testing.T) {
+	isolateHome(t)
+	runLeash(t, "", "init", "--verbose")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmds := hookCommands(t, filepath.Join(wd, ".claude", "settings.json"), "PreToolUse")
+	if len(cmds) != 1 || !strings.HasSuffix(cmds[0], " hook claude-code") {
+		t.Fatalf("PreToolUse commands = %q, want one plain hook command", cmds)
 	}
 }
 
@@ -293,12 +321,12 @@ func TestDesiredHooks(t *testing.T) {
 		t.Errorf("SessionStart spec = %+v", specs[1])
 	}
 
-	verbose := desiredHooks(true)
-	if !strings.HasSuffix(verbose[0].command, " hook claude-code --verbose") {
-		t.Errorf("verbose PreToolUse command = %q, want --verbose suffix", verbose[0].command)
+	quiet := desiredHooks(true)
+	if !strings.HasSuffix(quiet[0].command, " hook claude-code --quiet") {
+		t.Errorf("quiet PreToolUse command = %q, want --quiet suffix", quiet[0].command)
 	}
-	if verbose[1].command != specs[1].command {
-		t.Errorf("verbose must not change the SessionStart command, got %q", verbose[1].command)
+	if quiet[1].command != specs[1].command {
+		t.Errorf("quiet must not change the SessionStart command, got %q", quiet[1].command)
 	}
 }
 
@@ -328,7 +356,8 @@ func TestContainsHook(t *testing.T) {
 		{"/Users/dev/go/bin/leash hook claude-code", true},
 		{"leash hook claude-code session-start", true},
 		{"/opt/homebrew/bin/leash hook claude-code session-start", true},
-		{"/opt/homebrew/bin/leash hook claude-code --verbose", true},
+		{"/opt/homebrew/bin/leash hook claude-code --quiet", true},
+		{"/opt/homebrew/bin/leash hook claude-code --verbose", true}, // legacy installs
 		{"leash hook claude-codex", false},
 		{"leash check 'rm -rf ~'", false},
 		{"echo leash hook claude-code | wc -l", false},

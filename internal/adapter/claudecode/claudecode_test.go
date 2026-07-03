@@ -84,9 +84,9 @@ func TestWriteDecision(t *testing.T) {
 	rule := &policy.Rule{ID: "rm-recursive-home", Message: "Recursive delete of your home directory"}
 
 	cases := []struct {
-		name    string
-		d       policy.Decision
-		verbose bool
+		name  string
+		d     policy.Decision
+		quiet bool
 
 		wantEmpty    bool   // nothing at all on stdout
 		wantDecision string // hookSpecificOutput.permissionDecision ("" = key must be absent)
@@ -113,15 +113,15 @@ func TestWriteDecision(t *testing.T) {
 			wantMsgParts: []string{"Leash flagged this", "(rule: rm-recursive-home)"},
 		},
 		{
-			name:      "allow stays silent by default",
-			d:         policy.Decision{Effect: policy.EffectAllow},
-			wantEmpty: true,
+			name:         "allow announces without a decision by default",
+			d:            policy.Decision{Effect: policy.EffectAllow},
+			wantMsgParts: []string{"Leash allowed this"},
 		},
 		{
-			name:         "verbose allow announces without a decision",
-			d:            policy.Decision{Effect: policy.EffectAllow},
-			verbose:      true,
-			wantMsgParts: []string{"Leash allowed this"},
+			name:      "quiet allow stays silent",
+			d:         policy.Decision{Effect: policy.EffectAllow},
+			quiet:     true,
+			wantEmpty: true,
 		},
 		{
 			name:         "deny from a pack default has no rule to cite",
@@ -154,7 +154,7 @@ func TestWriteDecision(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := WriteDecision(&buf, tc.d, tc.verbose); err != nil {
+			if err := WriteDecision(&buf, tc.d, tc.quiet); err != nil {
 				t.Fatalf("WriteDecision: %v", err)
 			}
 

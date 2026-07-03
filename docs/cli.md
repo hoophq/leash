@@ -16,14 +16,14 @@ with the pack and rule counts.
 ```bash
 leash init            # project — ./.claude/settings.json
 leash init --global   # global  — ~/.claude/settings.json
-leash init --verbose  # also show a 🐕 chat notice for *allowed* tool calls
+leash init --quiet    # no 🐕 chat notice for *allowed* tool calls
 ```
 
 Deny, ask, and warn decisions always show a `🐕` notice in the chat naming the
-rule that fired; `--verbose` adds one for allowed calls too (noisy, but useful
-for a demo or for building trust). Re-run `init` without the flag to switch
-back — it always converges the hook commands, which is also how a stale binary
-path gets healed after an upgrade. Flags init doesn't manage (say, a
+rule that fired; allowed calls get one too, so you can see Leash watching
+(`--quiet` turns those off). Re-run `init` with or without the flag to
+switch — it always converges the hook commands, which is also how a stale
+binary path gets healed after an upgrade. Flags init doesn't manage (say, a
 hand-added `--rules`) survive that convergence.
 
 Idempotent and non-destructive: it preserves existing settings (including a
@@ -123,7 +123,7 @@ echo '{"cwd":".","tool_name":"Bash","tool_input":{"command":"rm -rf ~"}}' \
 ```
 
 Deny/ask/warn responses carry a `systemMessage` so the decision is visible in
-the chat. With `--verbose`, allowed calls get a notice too — but never an
+the chat. Allowed calls get a notice too (unless `--quiet`) — but never an
 explicit allow decision, so your own permission settings still apply.
 
 `leash hook claude-code session-start` is the `SessionStart` entrypoint: it
