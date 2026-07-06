@@ -1,0 +1,51 @@
+name: Detector gap (false negative)
+description: "A catastrophic command slipped through — Leash allowed something it should have caught."
+title: "[gap] "
+labels: ["detector-gap"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        First check the [threat model](https://github.com/hoophq/leash/blob/main/docs/threat-model.md):
+        some evasion paths (interpreter one-liners, write-then-run, obfuscation) are accepted
+        limits of shell-AST analysis, not gaps. If it's exploitable beyond a missed detection,
+        use [private reporting](https://github.com/hoophq/leash/security/advisories/new) instead.
+  - type: input
+    id: command
+    attributes:
+      label: The command that slipped through
+      placeholder: "find / -delete"
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: What it does, and why it's catastrophic
+      description: The blast radius — what would a developer lose if an agent ran this by mistake?
+    validations:
+      required: true
+  - type: dropdown
+    id: expected
+    attributes:
+      label: What Leash should have done
+      description: "The discipline: deny only what's almost never intentional; ask for anything a developer might mean."
+      options:
+        - ask
+        - deny
+        - warn
+    validations:
+      required: true
+  - type: checkboxes
+    id: threat-model
+    attributes:
+      label: Scope check
+      options:
+        - label: This isn't one of the accepted evasion paths in the threat model (or I'm arguing it shouldn't be one).
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Leash version
+      description: "`leash version`"
+    validations:
+      required: true
