@@ -107,8 +107,11 @@ watching; `leash init --quiet` turns those off.
 claude
 ```
 
-**→ [All CLI commands](docs/cli.md)** — `init`, `check` (test a verdict without
-an agent), `add`/`search` (rulepacks), `hook`, and `version`.
+And here's how you leave: `leash uninstall` removes exactly the hooks `init`
+added and touches nothing else. Dev-owned means you can walk away cleanly.
+
+**→ [All CLI commands](docs/cli.md)** — `init`/`uninstall`, `check` (test a
+verdict without an agent), `add`/`search` (rulepacks), `hook`, and `version`.
 
 ---
 

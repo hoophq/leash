@@ -35,6 +35,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newCheckCommand(),
 		newHookCommand(version),
 		newInitCommand(),
+		newUninstallCommand(),
 		newAddCommand(),
 		newSearchCommand(),
 		newRemoveCommand(),
