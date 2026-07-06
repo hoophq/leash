@@ -8,16 +8,22 @@ flag ([rulepack reference](rules.md)).
 
 ## `leash init`
 
-Wire Leash into Claude Code: it adds a `PreToolUse` hook to the settings so
-every tool call is inspected before it runs, and a `SessionStart` hook that
-shows a banner in the chat when a session begins — proof Leash is active,
-with the pack and rule counts.
+Wire Leash into an agent: it adds a `PreToolUse` hook to the agent's settings
+so every tool call is inspected before it runs, and a `SessionStart` hook that
+shows a banner when a session begins — proof Leash is active, with the pack
+and rule counts.
 
 ```bash
-leash init            # project — ./.claude/settings.json
-leash init --global   # global  — ~/.claude/settings.json
-leash init --quiet    # no 🐕 chat notice for *allowed* tool calls
+leash init                  # Claude Code, project — ./.claude/settings.json
+leash init --global         # Claude Code, global  — ~/.claude/settings.json
+leash init codex            # Codex, project — ./.codex/hooks.json
+leash init codex --global   # Codex, global  — ~/.codex/hooks.json
+leash init --quiet          # no 🐕 chat notice for *allowed* tool calls
 ```
+
+Codex adds one step: it only runs hooks you've explicitly trusted, so after
+`leash init codex`, run `/hooks` inside Codex to review and trust the Leash
+entries (init reminds you).
 
 Deny, ask, and warn decisions always show a `🐕` notice in the chat naming the
 rule that fired; allowed calls get one too, so you can see Leash watching
@@ -44,8 +50,10 @@ to hold the Leash hooks are cleaned up rather than left empty. Running it
 when nothing is installed is a friendly no-op.
 
 ```bash
-leash uninstall            # project — ./.claude/settings.json
-leash uninstall --global   # global  — ~/.claude/settings.json
+leash uninstall                 # Claude Code, project settings
+leash uninstall --global        # Claude Code, ~/.claude/settings.json
+leash uninstall codex           # Codex, ./.codex/hooks.json
+leash uninstall codex --global  # Codex, ~/.codex/hooks.json
 ```
 
 It recognizes the hooks the same way `init` heals them, so a stale binary
@@ -138,12 +146,19 @@ $ leash check 'rm -rf node_modules'
 
 The entrypoint an agent's hook system calls — it reads a tool call as JSON on
 stdin and writes the decision back in that agent's protocol. You don't run this
-yourself; `leash init` wires it in. The one adapter today is `claude-code`:
+yourself; `leash init` wires it in. The adapters today are `claude-code` and
+`codex`:
 
 ```bash
 echo '{"cwd":".","tool_name":"Bash","tool_input":{"command":"rm -rf ~"}}' \
   | leash hook claude-code
 ```
+
+`leash hook codex` speaks the same envelope (Codex adopted a Claude
+Code-compatible hook protocol) with Codex's own tool vocabulary: shell
+commands arrive as tool `Bash`, and file edits as tool `apply_patch` carrying
+the whole patch — which Leash screens **per file touched**, applying the most
+severe verdict. The same rulepack produces the same decisions on both agents.
 
 Deny/ask/warn responses carry a `systemMessage` so the decision is visible in
 the chat. Allowed calls get a notice too (unless `--quiet`) — but never an

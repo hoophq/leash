@@ -30,8 +30,12 @@ central audit, and approval workflows out of scope.
   semantic facts (recursive-delete + target class, force-push, history-rewrite,
   net→shell pipe). **This is the differentiator** — see Conventions.
 - `internal/adapter/<agent>/` — translate one agent's tool call ⇄ neutral `Action`.
-  `claudecode` (Claude Code PreToolUse + the SessionStart banner) is the first
-  adapter. Decisions and chat notices ride the same JSON envelope; an explicit
+  `claudecode` (Claude Code PreToolUse + the SessionStart banner) came first;
+  `codex` speaks Codex's Claude-compatible hook envelope with its own tool
+  vocabulary (`Bash`, `apply_patch` — expanded to one file_write per touched
+  file, most severe verdict wins). Adapters stay self-contained even where the
+  wire formats coincide — the two protocols are owned by different vendors and
+  may drift. Decisions and chat notices ride the same JSON envelope; an explicit
   "allow" decision is never emitted (it would bypass the user's own permission
   settings).
 - `internal/store/` — the user-level state dir (`~/.leash`): packs installed via
