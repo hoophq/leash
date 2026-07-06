@@ -12,28 +12,32 @@ func newUninstallCommand() *cobra.Command {
 	var global bool
 
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove the Leash hooks from Claude Code settings",
-		Long: "The exit door: removes the hooks `leash init` installed from your Claude\n" +
-			"Code settings, leaving everything else in the file untouched. By default\n" +
-			"it edits the project settings (./.claude/settings.json); use --global for\n" +
-			"~/.claude/settings.json.\n\n" +
+		Use:   "uninstall [agent]",
+		Short: "Remove the Leash hooks from an agent's settings",
+		Long: "The exit door: removes the hooks `leash init` installed from an agent's\n" +
+			"settings, leaving everything else in the file untouched. The agent is\n" +
+			"claude-code (default) or codex. By default it edits the project settings\n" +
+			"(./.claude or ./.codex); use --global for the user-level file under ~.\n\n" +
 			"Rulepacks installed with `leash add` are not touched — remove those with\n" +
 			"`leash remove <pack>`.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := settingsPath(global)
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := resolveAgent(args)
 			if err != nil {
 				return fail(cmd, err)
 			}
-			result, err := removeHooks(path)
+			path, err := settingsPath(agent, global)
+			if err != nil {
+				return fail(cmd, err)
+			}
+			result, err := removeHooks(path, agent.invocation)
 			if err != nil {
 				return fail(cmd, err)
 			}
 			switch result {
 			case hookRemoved:
 				fmt.Fprintf(cmd.OutOrStdout(), "Removed the Leash hooks from %s\n", path)
-				fmt.Fprintf(cmd.OutOrStdout(), "Restart Claude Code (or start a new session) for the change to take effect.\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "Restart %s (or start a new session) for the change to take effect.\n", agent.display)
 			default:
 				fmt.Fprintf(cmd.OutOrStdout(), "No Leash hooks found in %s\n", path)
 			}
@@ -53,15 +57,15 @@ const (
 	hookRemoved
 )
 
-// removeHooks deletes exactly the Leash hook commands from the settings file
-// at path — recognized the same way init converges them, via containsHook, so
-// a stale binary path, a hand-added flag, or a user-narrowed matcher all
-// still count as ours. Containers that held only Leash entries are removed
-// too (an entry whose hooks list empties, an event whose entries empty, the
-// hooks key itself), so init followed by uninstall leaves the settings as
-// they were. Everything else is preserved, and when there is nothing to
-// remove the file is not rewritten — or created.
-func removeHooks(path string) (hookRemoveResult, error) {
+// removeHooks deletes exactly the Leash hook commands for one agent from the
+// settings file at path — recognized the same way init converges them, via
+// containsHook, so a stale binary path, a hand-added flag, or a user-narrowed
+// matcher all still count as ours. Containers that held only Leash entries
+// are removed too (an entry whose hooks list empties, an event whose entries
+// empty, the hooks key itself), so init followed by uninstall leaves the
+// settings as they were. Everything else is preserved, and when there is
+// nothing to remove the file is not rewritten — or created.
+func removeHooks(path, invocation string) (hookRemoveResult, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -90,7 +94,7 @@ func removeHooks(path string) (hookRemoveResult, error) {
 			inner := asSlice(em["hooks"])
 			keptInner := make([]any, 0, len(inner))
 			for _, h := range inner {
-				if cmd, ok := asMap(h)["command"].(string); ok && containsHook(cmd) {
+				if cmd, ok := asMap(h)["command"].(string); ok && containsHook(cmd, invocation) {
 					removed = true
 					continue
 				}

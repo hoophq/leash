@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	wantCommand        = "/opt/homebrew/bin/leash hook claude-code"
+	claudeInvocation   = "leash hook claude-code"
+	wantCommand        = "/opt/homebrew/bin/" + claudeInvocation
 	wantSessionCommand = wantCommand + " session-start"
 )
 
@@ -20,8 +21,8 @@ func testSpecs(quiet bool) []hookSpec {
 		pre += " --quiet"
 	}
 	return []hookSpec{
-		{event: "PreToolUse", matcher: toolMatcher, command: pre},
-		{event: "SessionStart", matcher: sessionStartMatcher, command: wantSessionCommand},
+		{event: "PreToolUse", matcher: toolMatcher, command: pre, invocation: claudeInvocation},
+		{event: "SessionStart", matcher: sessionStartMatcher, command: wantSessionCommand, invocation: claudeInvocation},
 	}
 }
 
@@ -310,28 +311,30 @@ func TestInstallHooksRejectsInvalidJSON(t *testing.T) {
 }
 
 func TestDesiredHooks(t *testing.T) {
-	specs := desiredHooks(false)
-	if len(specs) != 2 {
-		t.Fatalf("desiredHooks returned %d specs, want 2", len(specs))
-	}
-	if specs[0].event != "PreToolUse" || !strings.HasSuffix(specs[0].command, " hook claude-code") {
-		t.Errorf("PreToolUse spec = %+v", specs[0])
-	}
-	if specs[1].event != "SessionStart" || !strings.HasSuffix(specs[1].command, " hook claude-code session-start") {
-		t.Errorf("SessionStart spec = %+v", specs[1])
-	}
+	for _, agent := range hookAgents {
+		specs := desiredHooks(agent, false)
+		if len(specs) != 2 {
+			t.Fatalf("desiredHooks(%s) returned %d specs, want 2", agent.name, len(specs))
+		}
+		if specs[0].event != "PreToolUse" || !strings.HasSuffix(specs[0].command, " hook "+agent.name) {
+			t.Errorf("%s PreToolUse spec = %+v", agent.name, specs[0])
+		}
+		if specs[1].event != "SessionStart" || !strings.HasSuffix(specs[1].command, " hook "+agent.name+" session-start") {
+			t.Errorf("%s SessionStart spec = %+v", agent.name, specs[1])
+		}
 
-	quiet := desiredHooks(true)
-	if !strings.HasSuffix(quiet[0].command, " hook claude-code --quiet") {
-		t.Errorf("quiet PreToolUse command = %q, want --quiet suffix", quiet[0].command)
-	}
-	if quiet[1].command != specs[1].command {
-		t.Errorf("quiet must not change the SessionStart command, got %q", quiet[1].command)
+		quiet := desiredHooks(agent, true)
+		if !strings.HasSuffix(quiet[0].command, " hook "+agent.name+" --quiet") {
+			t.Errorf("%s quiet PreToolUse command = %q, want --quiet suffix", agent.name, quiet[0].command)
+		}
+		if quiet[1].command != specs[1].command {
+			t.Errorf("quiet must not change the SessionStart command, got %q", quiet[1].command)
+		}
 	}
 }
 
 func TestHookInvocationKeepsSymlinksUnresolved(t *testing.T) {
-	got := hookInvocation()
+	got := hookInvocation(hookAgents[0])
 	if !strings.HasSuffix(got, " hook claude-code") {
 		t.Fatalf("hookInvocation() = %q, want suffix %q", got, " hook claude-code")
 	}
@@ -365,9 +368,20 @@ func TestContainsHook(t *testing.T) {
 		{"", false},
 	}
 	for _, tt := range tests {
-		if got := containsHook(tt.cmd); got != tt.want {
+		if got := containsHook(tt.cmd, claudeInvocation); got != tt.want {
 			t.Errorf("containsHook(%q) = %v, want %v", tt.cmd, got, tt.want)
 		}
+	}
+
+	// Per-agent identity: one agent's invocation never claims the other's.
+	if containsHook("/usr/local/bin/leash hook codex", claudeInvocation) {
+		t.Error("a codex hook must not be recognized as claude-code's")
+	}
+	if !containsHook("/usr/local/bin/leash hook codex --quiet", "leash hook codex") {
+		t.Error("a codex hook with flags must be recognized as codex's")
+	}
+	if containsHook("/usr/local/bin/leash hook claude-code", "leash hook codex") {
+		t.Error("a claude-code hook must not be recognized as codex's")
 	}
 }
 

@@ -115,6 +115,18 @@ claude
 And here's how you leave: `leash uninstall` removes exactly the hooks `init`
 added and touches nothing else. Dev-owned means you can walk away cleanly.
 
+## Quickstart — Codex
+
+Same guardrails, same rulepacks, one command:
+
+```bash
+leash init codex   # writes ./.codex/hooks.json (--global for ~/.codex)
+```
+
+Then run `/hooks` inside Codex once to trust the Leash entries (Codex only
+runs hooks you've approved). Shell commands and `apply_patch` file edits are
+screened by the same engine — one rulepack, every agent.
+
 **→ [All CLI commands](docs/cli.md)** — `init`/`uninstall`, `check` (test a
 verdict without an agent), `add`/`search` (rulepacks), `hook`, and `version`.
 
@@ -227,7 +239,8 @@ developer can't override it.
 - [x] One-line installers — Homebrew, npm
 - [x] A shareable rulepack registry — `leash search` · `leash add <pack>` ·
       [publish your own](docs/registry.md)
-- [ ] More agents — Codex, Cursor, Gemini CLI
+- [x] A second agent — Codex (same rulepacks, zero engine changes)
+- [ ] More agents — Cursor, Gemini CLI
 
 ## License
 
