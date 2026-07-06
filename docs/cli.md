@@ -30,6 +30,24 @@ Idempotent and non-destructive: it preserves existing settings (including a
 matcher you've customized) and won't add the hooks twice. Restart Claude Code
 (or start a new session) to activate them.
 
+## `leash uninstall`
+
+The exit door: removes the hooks `leash init` installed — and nothing else.
+Unrelated hooks, customized matchers on other entries, and every other
+setting in the file stay exactly as they were; containers that existed only
+to hold the Leash hooks are cleaned up rather than left empty. Running it
+when nothing is installed is a friendly no-op.
+
+```bash
+leash uninstall            # project — ./.claude/settings.json
+leash uninstall --global   # global  — ~/.claude/settings.json
+```
+
+It recognizes the hooks the same way `init` heals them, so a stale binary
+path or a hand-added flag doesn't stop the removal. Rulepacks installed with
+`leash add` are separate — remove those with [`leash remove`](#leash-remove),
+or delete `~/.leash` to clear every trace.
+
 ## `leash search`
 
 Discover rulepacks published in the [registry](registry.md). With no query,
