@@ -1,0 +1,56 @@
+name: False positive
+description: "Leash blocked or questioned an everyday command. The most valuable report we get — near-zero false positives is the whole product."
+title: "[FP] "
+labels: ["false-positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you — false-positive reports are exactly how the discipline holds.
+        Every fix ships with a test pinning your command as ALLOW forever.
+  - type: input
+    id: command
+    attributes:
+      label: The exact command (or file path / URL)
+      description: Verbatim, as the agent ran it. `leash check '<command>'` reproduces the verdict without an agent.
+      placeholder: "rm -rf ./build-cache"
+    validations:
+      required: true
+  - type: dropdown
+    id: decision
+    attributes:
+      label: What Leash decided
+      options:
+        - ask
+        - deny
+        - warn
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: The rule that fired
+      description: Named in the 🐕 chat notice or the `leash check` card, e.g. `destructive-delete-outside-workspace`.
+    validations:
+      required: false
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this is an everyday operation
+      description: What were you (or the agent) doing? Context decides where the matcher needs to narrow.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Leash version
+      description: "`leash version`"
+    validations:
+      required: true
+  - type: textarea
+    id: packs
+    attributes:
+      label: Active rulepacks beyond recommended
+      description: Installed packs (`ls ~/.leash/packs`), a project `.leash.yaml`, or a `--rules` file — paste the relevant rule if it's yours.
+    validations:
+      required: false

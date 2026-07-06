@@ -97,8 +97,8 @@ mean emulating execution.
 `find / -delete` is **allowed** today. The semantic vocabulary grows one
 detector at a time, each shipped with catch-*and*-safe tests. An unmodeled
 destructive tool passes silently — when you find one,
-[file a detector-gap issue](https://github.com/hoophq/leash/issues); those
-reports are exactly how the vocabulary grows.
+[file a detector-gap issue](https://github.com/hoophq/leash/issues/new?template=detector-gap.yml);
+those reports are exactly how the vocabulary grows.
 
 **Disarming Leash itself.**
 The hooks live in dev-editable settings, so an agent with file-write access
@@ -127,10 +127,11 @@ a VM) and centrally enforced policy, with Leash still riding along for the
 mistakes.
 
 Found a bypass we don't list here? That's a
-[detector-gap report](https://github.com/hoophq/leash/issues) — or a
-[security report](https://github.com/hoophq/leash/security) if it's a flaw in
-Leash itself rather than a scope limit. Both are welcome; this page only
-stays honest if it stays current.
+[detector-gap report](https://github.com/hoophq/leash/issues/new?template=detector-gap.yml) —
+or a [private security report](https://github.com/hoophq/leash/security/advisories/new)
+if it's a flaw in Leash itself rather than a scope limit
+([SECURITY.md](../SECURITY.md) draws that line). Both are welcome; this page
+only stays honest if it stays current.
 
 ---
 
