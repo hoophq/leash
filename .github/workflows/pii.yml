@@ -8,6 +8,10 @@ on:
     types: [created, edited]
   issues:
     types: [opened, edited]
+  pull_request_review_comment: # inline review comments
+    types: [created, edited]
+  pull_request_review: # review bodies
+    types: [submitted, edited]
 
 permissions:
   contents: read
@@ -49,8 +53,8 @@ jobs:
       - name: Scan PR diff
         uses: hoophq/alcatraz-action@v1
 
-  # Scan new/edited issue and comment bodies. Report only — a red X on a
-  # conversation event blocks nothing, so failing would just add noise.
+  # Scan new/edited issue, comment, and review bodies. Report only — a red X
+  # on a conversation event blocks nothing, so failing would just add noise.
   comment:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -60,8 +64,26 @@ jobs:
       issues: write
       pull-requests: write # replies on PR comments too
     steps:
+      # mode: comment reads .comment.body / .issue.body, which also covers
+      # inline review comments; review bodies live at .review.body, which the
+      # action can't see — scan those as a file below.
       - name: Scan comment body
+        if: github.event_name != 'pull_request_review'
         uses: hoophq/alcatraz-action@v1
         with:
           mode: comment
+          fail-on-findings: false
+
+      - name: Write review body for scanning
+        if: github.event_name == 'pull_request_review'
+        env:
+          REVIEW_BODY: ${{ github.event.review.body }}
+        run: printf '%s\n' "$REVIEW_BODY" > /tmp/review-body.txt
+
+      - name: Scan review body
+        if: github.event_name == 'pull_request_review'
+        uses: hoophq/alcatraz-action@v1
+        with:
+          mode: files
+          paths: /tmp/review-body.txt
           fail-on-findings: false
