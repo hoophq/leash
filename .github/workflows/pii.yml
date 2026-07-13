@@ -2,6 +2,8 @@ name: PII scan
 
 on:
   pull_request:
+    # edited: rescan when the title/body change.
+    types: [opened, synchronize, reopened, edited]
   issue_comment: # comments on issues AND pull requests
     types: [created, edited]
   issues:
@@ -27,6 +29,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The title/body aren't part of the diff, so scan them as a file first
+      # (a diff finding must not mask this). The env indirection keeps the
+      # untrusted metadata out of shell parsing.
+      - name: Write PR title and body for scanning
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" > /tmp/pr-metadata.txt
+
+      - name: Scan PR title and body
+        uses: hoophq/alcatraz-action@v1
+        with:
+          mode: files
+          paths: /tmp/pr-metadata.txt
+          comment: false # the diff scan owns the sticky report
 
       - name: Scan PR diff
         uses: hoophq/alcatraz-action@v1
