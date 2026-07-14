@@ -189,6 +189,33 @@ func TestInstallStatusLineHooksRespectsUserScope(t *testing.T) {
 	}
 }
 
+// A Fence status line installed before the user configured their own must
+// stop shadowing it: the next converge removes Fence's entry from the target
+// and falls back to the banner.
+func TestInstallStatusLineHooksStopsShadowingOnRerun(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeTestFile(t, filepath.Join(home, ".claude", "settings.json"),
+		`{"statusLine":{"type":"command","command":"ccusage statusline"}}`)
+	path := filepath.Join(t.TempDir(), ".claude", "settings.json")
+	writeTestFile(t, path, `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"`+wantCommand+`"}]}]},
+		"statusLine":{"type":"command","command":"`+wantStatusCommand+`"}}`)
+
+	got, note, err := installStatus(t, path, false, false)
+	if err != nil || got != hookInstalled {
+		t.Fatalf("installStatusLineHooks = %v, %v; want hookInstalled, nil", got, err)
+	}
+	if note == "" {
+		t.Error("want a note explaining the fallback to the banner")
+	}
+	if cmd := statusLineCommandOf(t, path); cmd != "" {
+		t.Errorf("statusLine = %q, want removed (it shadowed the user's)", cmd)
+	}
+	if cmds := hookCommands(t, path, "SessionStart"); !reflect.DeepEqual(cmds, []string{wantSessionCommand}) {
+		t.Errorf("SessionStart commands = %q, want the banner fallback", cmds)
+	}
+}
+
 // Fence's own status line in the user scope is not a conflict: a project
 // install shadowing it changes nothing the user configured.
 func TestInstallStatusLineHooksIgnoresOwnUserScopeEntry(t *testing.T) {

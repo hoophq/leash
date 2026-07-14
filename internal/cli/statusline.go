@@ -23,6 +23,13 @@ func installStatusLineHooks(path string, agent hookAgent, specs []hookSpec, slCo
 
 	if takenAt, taken := statusLineTaken(path, settings, global, agent.invocation); taken {
 		result := convergeHooks(settings, []hookSpec{pre, session})
+		// A Fence statusLine left in the target from an earlier install would
+		// keep shadowing the user's — drop it. Only Fence's own entry can
+		// match: a foreign one in the target is never containsHook-owned.
+		if cmd, ok := asMap(settings["statusLine"])["command"].(string); ok && containsHook(cmd, agent.invocation) {
+			delete(settings, "statusLine")
+			result = max(result, hookUpdated)
+		}
 		note := fmt.Sprintf("A status line is already configured (%s) — left untouched; the session banner announces Fence instead.\n"+
 			"To show Fence there too, have your statusline command append the output of `%s statusline`.",
 			takenAt, agent.invocation)
